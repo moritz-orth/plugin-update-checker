@@ -129,7 +129,7 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		}
 		/**
 		 *
-		 * e.g.: https://int.bold-ventures.de/bitbucket/rest/api/latest/projects/INT/repos/wordpress-bv-info-service/archive?format=zip
+		 * e.g.: /bitbucket/rest/api/latest/projects/INT/repos/wordpress-bv-info-service/archive?format=zip
 		 * wordpress-bv-info-service/archive?at=refs%2Ftags%2Fv1.3.4&format=zip
 		 * @param string $ref
 		 * @return string
@@ -137,7 +137,7 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		protected function getDownloadUrl($ref) {
 			return sprintf(
 				'https://%s/%s/%s/archive?at=refs/tags/%s&format=zip',
-				$this->customHost,
+				$this->customHost,		// => my-fancy-host.de
 				$this->customApiPath, 	// => bitbucket/rest/api/latest/projects/INT/repos
 				$this->repository,		// => wordpress-bv-info-service
 				$ref
@@ -178,6 +178,7 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		 * @return mixed|WP_Error
 		 */
 		public function api($url, $version = '2.0') {
+			// /bitbucket/rest/api/latest/projects/INT/repos/wordpress-bv-info-service/archive?format=zip
 			$url = implode('/', array(
 				'https://api.bitbucket.org',
 				$version,
@@ -190,7 +191,7 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 			if ( $this->oauth ) {
 				$url = $this->oauth->sign($url,'GET');
 			}
-			$options = array('timeout' => 10);
+			$options = array('timeout' => 10, 'Authorization' => 'Bearer '.$this->accessToken);
 			if ( !empty($this->httpFilterName) ) {
 				$options = apply_filters($this->httpFilterName, $options);
 			}
