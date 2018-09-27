@@ -73,13 +73,25 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		 * @return Puc_v4p4_Vcs_Reference|null
 		 */
 		public function getTag($tagName) {
-			$tag = $this->api('/refs/tags/' . $tagName);
+			$tag = $this->api('/tags/' . $tagName);
 			if ( is_wp_error($tag) || empty($tag) ) {
 				return null;
 			}
+			
+			/*
+				{
+				"id": "refs/tags/v1.2.2",
+				"displayId": "v1.2.2",
+				"type": "TAG",
+				"latestCommit": "6e4b261e4ec0d783bf146c802212569e47931643",
+				"latestChangeset": "6e4b261e4ec0d783bf146c802212569e47931643",
+				"hash": null
+				}			
+			*/
+			
 			return new Puc_v4p4_Vcs_Reference(array(
-				'name' => $tag->name,
-				'version' => ltrim($tag->name, 'v'),
+				'name' => $tag->displayId,
+				'version' => ltrim($tag->displayId, 'v'),
 				'updated' => $tag->target->date,
 				'downloadUrl' => $this->getDownloadUrl($tag->name),
 			));
@@ -90,7 +102,7 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		 * @return Puc_v4p4_Vcs_Reference|null
 		 */
 		public function getLatestTag() {
-			$tags = $this->api('/refs/tags?sort=-target.date');
+			$tags = $this->api('/tags?sort=-target.date');
 			if ( !isset($tags, $tags->values) || !is_array($tags->values) ) {
 				return null;
 			}
@@ -129,8 +141,6 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		}
 		/**
 		 *
-		 * e.g.: /bitbucket/rest/api/latest/projects/INT/repos/wordpress-bv-info-service/archive?format=zip
-		 * wordpress-bv-info-service/archive?at=refs%2Ftags%2Fv1.3.4&format=zip
 		 * @param string $ref
 		 * @return string
 		 */
@@ -177,13 +187,17 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		 * @param string $version
 		 * @return mixed|WP_Error
 		 */
-		public function api($url, $version = '2.0') {
-			// /bitbucket/rest/api/latest/projects/INT/repos/wordpress-bv-info-service/archive?format=zip
+		public function api($url, $version = '1.0') {
+			// /bitbucket/rest/api/latest/projects/INT/repos/wordpress-bv-info-service
 			$url = implode('/', array(
-				'https://api.bitbucket.org',
+				'https:/',
+				$this->customHost',
+				'rest',
+				'api',
 				$version,
-				'repositories',
-				$this->username,
+				'projects',
+				$this->projectKey,
+				'repos',
 				$this->repository,
 				ltrim($url, '/')
 			));
