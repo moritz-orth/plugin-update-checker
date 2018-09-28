@@ -2,17 +2,12 @@
 if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 
 	class Puc_v4p4_Vcs_BitBucketServerApi extends BitBucketApi {
-		
-		/**
-		 * @var Puc_v4p4_OAuthSignature
-		 */
-		private $oauth = null;
-		
+			
 		/**
 		 * @var string
-		 */u
-		private $username;
-		
+		 */
+		private $projectKey;
+
 		/**
 		 * @var string
 		 */
@@ -23,10 +18,15 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		 */
 		private $accessToken;
 		
+		/*
+		 * $repositoryUrl = https://<host>/bitbucket/projects/INT/repos/wordpress-bv-info-service/
+		 * $path = /bitbucket/projects/INT/repos/wordpress-bv-info-service/
+		 * 
+		 */
 		public function __construct($repositoryUrl, $accessToken) {
 			$path = @parse_url($repositoryUrl, PHP_URL_PATH);
-			if ( preg_match('@^/?(?P<username>[^/]+?)/(?P<repository>[^/#?&]+?)/?$@', $path, $matches) ) {
-				$this->username = $matches['username'];
+			if ( preg_match('@^/projects/?(?P<projectKey>[^/]+?)/repos/(?P<repository>[^/#?&]+?)/?$@', $path, $matches) ) {
+				$this->projectKey = $matches['projectKey'];
 				$this->repository = $matches['repository'];
 			} else {
 				throw new InvalidArgumentException('Invalid BitBucket repository URL: "' . $repositoryUrl . '"');
@@ -55,6 +55,7 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 			}
 			return $updateSource;
 		}
+		
 		public function getBranch($branchName) {
 			$branch = $this->api('/refs/branches/' . $branchName);
 			if ( is_wp_error($branch) || empty($branch) ) {
@@ -89,10 +90,17 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 				}			
 			*/
 			
+			$latestCommit = $tag->latestCommit;
+			
+			$commit = $this->api('/commits/' . $latestCommit);
+			if ( is_wp_error($commit) || empty($commit) ) {
+				return null;
+			}			
+			
 			return new Puc_v4p4_Vcs_Reference(array(
 				'name' => $tag->displayId,
 				'version' => ltrim($tag->displayId, 'v'),
-				'updated' => $tag->target->date,
+				'updated' => $commit->committerTimestamp; // Formating needed?
 				'downloadUrl' => $this->getDownloadUrl($tag->name),
 			));
 		}
