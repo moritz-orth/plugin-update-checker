@@ -1,6 +1,10 @@
 <?php
 if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 
+/**
+ * https://docs.atlassian.com/bitbucket-server/rest/5.10.1/bitbucket-rest.html?utm_source=%2Fstatic%2Frest%2Fbitbucket-server%2Flatest%2Fbitbucket-rest.html&utm_medium=301
+ */
+
 	class Puc_v4p4_Vcs_BitBucketServerApi extends BitBucketApi {
 			
 		/**
