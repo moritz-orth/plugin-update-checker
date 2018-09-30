@@ -1,12 +1,21 @@
 <?php
 if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 
-/**
- * https://docs.atlassian.com/bitbucket-server/rest/5.10.1/bitbucket-rest.html?utm_source=%2Fstatic%2Frest%2Fbitbucket-server%2Flatest%2Fbitbucket-rest.html&utm_medium=301
- */
+	/**
+	 * for self hosted bitbucket servers
+	 * Using the V1.0 API (https://docs.atlassian.com/bitbucket-server/rest/5.10.1/bitbucket-rest.html?utm_source=%2Fstatic%2Frest%2Fbitbucket-server%2Flatest%2Fbitbucket-rest.html&utm_medium=301)
+	 * Using an Auth token for Authentification
+	 *
+	 */
+	class Puc_v4p4_Vcs_BitBucketServerApi extends Puc_v4p4_Vcs_Api {
 
-	class Puc_v4p4_Vcs_BitBucketServerApi extends BitBucketApi {
-			
+		protected $tagNameProperty = 'displayId';
+
+		/**
+		 * @var string
+		 */
+		private $bitbucketServerRoot;
+
 		/**
 		 * @var string
 		 */
@@ -18,16 +27,22 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		private $repository;
 		
 		/**
-		 * Bitbucket Users access token with read access
+		 * @var string Authentication Token for API access. Optional.
 		 */
 		private $accessToken;
-		
-		/*
-		 * $repositoryUrl = https://<host>/bitbucket/projects/INT/repos/wordpress-bv-info-service/
-		 * $path = /bitbucket/projects/INT/repos/wordpress-bv-info-service/
-		 * 
+
+		/**
+		 * Extract projectKey and repository name from the URL
+		 *
+		 * @param $repositoryUrl /bitbucket/projects/INT/repos/wordpress-bv-info-service/
+		 * @param $accessToken
+		 *
 		 */
-		public function __construct($repositoryUrl, $accessToken) {
+		public function __construct($repositoryUrl, $accessToken = null) {
+
+			// TODO: extract from repositoryUrl
+			$this->bitbucketServerRoot = 'https://int.bold-ventures.de/bitbucket';
+
 			$path = @parse_url($repositoryUrl, PHP_URL_PATH);
 			if ( preg_match('@^/projects/?(?P<projectKey>[^/]+?)/repos/(?P<repository>[^/#?&]+?)/?$@', $path, $matches) ) {
 				$this->projectKey = $matches['projectKey'];
@@ -35,10 +50,10 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 			} else {
 				throw new InvalidArgumentException('Invalid BitBucket repository URL: "' . $repositoryUrl . '"');
 			}
-			
-			//TODO
+
 			parent::__construct($repositoryUrl, $accessToken);
 		}
+
 		/**
 		 * Figure out which reference (i.e tag or branch) contains the latest version.
 		 *
@@ -46,29 +61,34 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		 * @return null|Puc_v4p4_Vcs_Reference
 		 */
 		public function chooseReference($configBranch) {
+
 			$updateSource = null;
-			//Check if there's a "Stable tag: 1.2.3" header that points to a valid tag.
+
+			// Check if there's a "Stable tag: 1.2.3" header that points to a valid tag.
 			$updateSource = $this->getStableTag($configBranch);
-			//Look for version-like tags.
+
+			// Look for version-like tags.
 			if ( !$updateSource && ($configBranch === 'master') ) {
 				$updateSource = $this->getLatestTag();
 			}
-			//If all else fails, use the specified branch itself.
+
+			// If all else fails, use the specified branch itself.
 			if ( !$updateSource ) {
 				$updateSource = $this->getBranch($configBranch);
 			}
+
 			return $updateSource;
 		}
 		
 		public function getBranch($branchName) {
-			$branch = $this->api('/refs/branches/' . $branchName);
+			$branch = $this->api('/branches/' . $branchName);
 			if ( is_wp_error($branch) || empty($branch) ) {
 				return null;
 			}
 			return new Puc_v4p4_Vcs_Reference(array(
 				'name' => $branch->name,
 				'updated' => $branch->target->date,
-				'downloadUrl' => $this->getDownloadUrl($branch->name),
+				'downloadUrl' => $this->getDownloadUrl($branch->id),
 			));
 		}
 		/**
@@ -78,12 +98,13 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		 * @return Puc_v4p4_Vcs_Reference|null
 		 */
 		public function getTag($tagName) {
-			$tag = $this->api('/tags/' . $tagName);
+
+			$tag = $this->api('/tags/' . $tagName, '1.0');
 			if ( is_wp_error($tag) || empty($tag) ) {
 				return null;
 			}
 			
-			/*
+			/* Example /tag response for API v1.0
 				{
 				"id": "refs/tags/v1.2.2",
 				"displayId": "v1.2.2",
@@ -93,10 +114,8 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 				"hash": null
 				}			
 			*/
-			
-			$latestCommit = $tag->latestCommit;
-			
-			$commit = $this->api('/commits/' . $latestCommit);
+
+			$commit = $this->api('/commits/' . $tag->latestCommit);
 			if ( is_wp_error($commit) || empty($commit) ) {
 				return null;
 			}			
@@ -104,8 +123,8 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 			return new Puc_v4p4_Vcs_Reference(array(
 				'name' => $tag->displayId,
 				'version' => ltrim($tag->displayId, 'v'),
-				'updated' => $commit->committerTimestamp; // Formating needed?
-				'downloadUrl' => $this->getDownloadUrl($tag->name),
+				'updated' => $commit->committerTimestamp, // TODO: is datetime formating needed?
+				'downloadUrl' => $this->getDownloadUrl($tag->id)
 			));
 		}
 		/**
@@ -114,20 +133,30 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		 * @return Puc_v4p4_Vcs_Reference|null
 		 */
 		public function getLatestTag() {
+
 			$tags = $this->api('/tags?sort=-target.date');
+
 			if ( !isset($tags, $tags->values) || !is_array($tags->values) ) {
 				return null;
 			}
-			//Filter and sort the list of tags.
+
+			// Filter and sort the list of tags.
 			$versionTags = $this->sortTagsByVersion($tags->values);
-			//Return the first result.
+
+			// Return the first result.
 			if ( !empty($versionTags) ) {
 				$tag = $versionTags[0];
+
+				$commit = $this->api('/commits/' . $tag->latestCommit);
+				if ( is_wp_error($commit) || empty($commit) ) {
+					return null;
+				}
+
 				return new Puc_v4p4_Vcs_Reference(array(
 					'name' => $tag->name,
 					'version' => ltrim($tag->name, 'v'),
-					'updated' => $tag->target->date,
-					'downloadUrl' => $this->getDownloadUrl($tag->name),
+					'updated' => $commit->committerTimestamp,
+					'downloadUrl' => $this->getDownloadUrl($tag->id),
 				));
 			}
 			return null;
@@ -151,19 +180,26 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 			}
 			return null;
 		}
+
 		/**
 		 *
 		 * @param string $ref
+		 * @param string $version
 		 * @return string
 		 */
-		protected function getDownloadUrl($ref) {
-			return sprintf(
-				'https://%s/%s/%s/archive?at=refs/tags/%s&format=zip',
-				$this->customHost,		// => my-fancy-host.de
-				$this->customApiPath, 	// => bitbucket/rest/api/latest/projects/INT/repos
-				$this->repository,		// => wordpress-bv-info-service
-				$ref
-			);
+		protected function getDownloadUrl($ref, $version = '1.0') {
+			return implode('/', array(
+				$this->bitbucketServerRoot,
+				'rest',
+				'api',
+				$version,
+				'projects',
+				$this->projectKey,
+				'repos',
+				$this->repository,
+				ltrim('archive?at=' . $ref . '&format=zip', '/')
+			));
+
 		}
 		/**
 		 * Get the contents of a file from a specific branch or tag.
@@ -202,8 +238,7 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 		public function api($url, $version = '1.0') {
 			// /bitbucket/rest/api/latest/projects/INT/repos/wordpress-bv-info-service
 			$url = implode('/', array(
-				'https:/',
-				$this->customHost',
+				$this->bitbucketServerRoot,
 				'rest',
 				'api',
 				$version,
@@ -240,7 +275,7 @@ if ( !class_exists('Puc_v4p4_Vcs_BitBucketServerApi', false) ):
 			return $error;
 		}
 		/**
-		 * @param array $credentials
+		 * @param array $credentialsh
 		 */
 		public function setAuthentication($credentials) {
 			parent::setAuthentication($credentials);
